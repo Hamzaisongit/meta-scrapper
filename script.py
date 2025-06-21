@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import requests
 import zstandard as zstd
 import brotli
@@ -75,9 +75,20 @@ def parse_meta_feed(response):
     except Exception as e:
         return [], str(e)
 
+def filter_posts(posts, keyword):
+    if not keyword:
+        return posts
+    keyword = keyword.lower()
+    return [
+        post for post in posts
+        if keyword in post["user_query"].lower()
+    ]
+
 @app.route("/scrape", methods=["POST"])
 def scrape_posts():
     try:
+        data = request.get_json(silent=True)
+        keyword = data.get("keyword", None) if data else None
         
         response = requests.post(url, headers=headers, data=get_payload())
         
@@ -98,10 +109,13 @@ def scrape_posts():
                 "posts": []
             }), 500
         
+        # Apply keyword filtering
+        filtered_posts = filter_posts(posts, keyword)
+        
         return jsonify({
             "status": "success",
-            "posts": posts,
-            "count": len(posts)
+            "posts": filtered_posts,
+            "count": len(filtered_posts)
         })
     
     except Exception as e:
