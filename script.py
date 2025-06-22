@@ -1,17 +1,19 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 import requests
 import zstandard as zstd
-import brotli
-import gzip
+# import brotli
+# import gzip
 import json
 import time
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
 # Configuration
 url = "https://www.meta.ai/api/graphql/"
@@ -60,7 +62,12 @@ def parse_meta_feed(response):
         print(f"Raw response (first 200 chars): {cleaned[:200]}")  # Debug log
         data = json.loads(cleaned)
         posts = []
-        edges = data.get("data", {}).get("xfb_genai_fetch_feed", {}).get("edges", [])
+        feed = data.get("data", {}).get("xfb_genai_fetch_feed", {})
+        edges = feed.get("edges", [])
+        page_info = feed.get("page_info", {})
+        has_next_page = page_info.get("has_next_page", False)
+        end_cursor = page_info.get("end_cursor")
+
         for edge in edges:
             node = edge.get("node", {})
             ai_response = node.get("body_renderer_v2", {}).get("text_contents", [{}])[0].get("text", "")
@@ -71,9 +78,9 @@ def parse_meta_feed(response):
                 "username": node.get("genai_owner", {}).get("username", ""),
                 "created": node.get("created_timestamp", "")
             })
-        return posts, None
+        return posts, has_next_page, end_cursor, None
     except Exception as e:
-        return [], str(e)
+        return [], False, None, str(e)
 
 def filter_posts(posts, keyword):
     if not keyword:
@@ -87,26 +94,25 @@ def filter_posts(posts, keyword):
 @app.route("/scrape", methods=["POST"])
 def scrape_posts():
     try:
-        data = request.get_json(silent=True)
-        keyword = data.get("keyword", None) if data else None
+        data = request.get_json(silent=True) or {}
+        keyword = data.get("keyword")
+        after_cursor = data.get("after_cursor")
         
-        response = requests.post(url, headers=headers, data=get_payload())
+        response = requests.post(url, headers=headers, data=get_payload(after_cursor))
         
         print(f"Status code: {response.status_code}")
-        print(response)  # Debug log
+        # print(response.text)  # Debug log
         if response.status_code != 200:
             return jsonify({
                 "status": "error",
                 "message": f"Request failed with status {response.status_code}: {response.text[:200]}",
-                "posts": []
             }), response.status_code
         
-        posts, error = parse_meta_feed(response)
+        posts, has_next_page, end_cursor, error = parse_meta_feed(response)
         if error:
             return jsonify({
                 "status": "error",
                 "message": f"Parsing error: {error}",
-                "posts": []
             }), 500
         
         # Apply keyword filtering
@@ -115,15 +121,25 @@ def scrape_posts():
         return jsonify({
             "status": "success",
             "posts": filtered_posts,
-            "count": len(filtered_posts)
+            "count": len(filtered_posts),
+            "page_info": {
+                "has_next_page": has_next_page,
+                "end_cursor": end_cursor
+            }
         })
     
     except Exception as e:
         return jsonify({
             "status": "error",
             "message": f"Unexpected error: {str(e)}",
-            "posts": []
         }), 500
 
+@app.route("/", methods=["GET"])
+def health_check():
+    return jsonify({"status": "healthy", "message": "Meta Scraper API is running"})
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Get port from environment variable (Render sets PORT)
+    port = int(os.environ.get("PORT", 5000))
+    # Bind to 0.0.0.0 to accept external connections
+    app.run(host="0.0.0.0", port=port, debug=False)
