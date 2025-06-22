@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const keyword = keywordInput.value.trim();
         
         try {
-            const response = await fetch("http://127.0.0.1:5000/scrape", {
+            const response = await fetch("https://meta-scrapper-h34n.onrender.com/scrape", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
