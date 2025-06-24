@@ -36,7 +36,7 @@ headers = {
     "Sec-Fetch-Site": "same-origin",
     "X-Asbd-Id": "359341",
     "X-Fb-Friendly-Name": "KadabraFeedContainerPaginationQuery",
-    "X-Fb-Lsd": "AVoeE2CDptc",
+    "X-Fb-Lsd": "AVrN-2_AsGM",
     "Cookie": "datr=ALZVaD6CLkRttIqWUyD2FXhc; abra_csrf=zq0bqskUSA-ELyZUsxvw_S; wd=1528x238"
 }
 
